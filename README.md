@@ -1,21 +1,20 @@
 # Verify-bot
 
-Discord OAuth2認証Webサイトから呼び出される、Discord Bot APIです。
-
-## 必要環境
-- Node.js 18以上
-- Discordサーバーに追加済みのBot
-- HTTPSで公開されたAPIエンドポイント
+Discord OAuth2認証ジョブをVerify-webからHTTPSで取得して処理するBot Workerです。受信APIサーバーを起動しないため、Bot側のAPIをインターネットに公開する必要はありません。
 
 ## セットアップ
-1. ホスティングの環境変数に `DISCORD_TOKEN`、`GUILD_ID`、`VERIFIED_ROLE_ID`、`API_SECRET` を設定します。
-2. `API_SECRET` は32文字以上のランダム値にし、Verify-web側の `BOT_API_SECRET` と一致させます。
-3. Botに対象サーバーのManage Roles権限を付与します。
-4. Botのロールを認証ロールより上に配置します。
-5. `npm install` 後、`npm start` で起動します。
+1. 環境変数にDISCORD_TOKEN、GUILD_ID、VERIFIED_ROLE_ID、WEB_API_URL、WEB_API_SECRETを設定します。
+2. WEB_API_URLはVerify-webのHTTPS URLにします。
+3. WEB_API_SECRETはVerify-webのBOT_API_SECRETと完全一致させます（32文字以上）。
+4. 必要に応じてPOLL_INTERVAL_MSを設定します（既定5000ms）。
+5. Botに対象サーバーのManage Roles権限を付与し、Botのロールを認証ロールより上に配置します。
+6. npm install後、npm startで起動します。
 
-## API
-- `GET /health`: ヘルスチェック
-- `POST /api/verify`: Bearer API_SECRETで保護。Web側からDiscordユーザーIDとOAuth2アクセストークンを受け取り、OAuth2 guilds.joinと認証ロール付与を実行します。
+## 動作
+- BotはVerify-webのGET /internal/jobs/nextを定期的にHTTPSで確認します。
+- ジョブを取得したらDiscord OAuth2 guilds.joinでサーバーに参加させ、認証ロールを付与します。
+- 成功時はPOST /internal/jobs/:jobId/complete、失敗時はPOST /internal/jobs/:jobId/failを呼び出します。
+- Web側のジョブリースにより、Bot停止時も期限切れジョブを再取得できます。
+- アクセストークンやBotトークンをログ出力しません。
 
-OAuth2アクセストークンは処理中のみ使用し、保存・ログ出力しません。APIはHTTPSの背後で公開し、API_SECRETを第三者に共有しないでください。
+Bot側はHTTPサーバーを起動しません。MWSで受信ポートを公開する必要はありません。
