@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 
 const { DISCORD_TOKEN, GUILD_ID, VERIFIED_ROLE_ID, WEB_API_URL, WEB_API_SECRET, POLL_INTERVAL_MS = "5000" } = process.env;
 for (const [name, value] of Object.entries({ DISCORD_TOKEN, GUILD_ID, VERIFIED_ROLE_ID, WEB_API_URL, WEB_API_SECRET })) {
@@ -72,8 +72,52 @@ async function pollOnce() {
   finally { polling = false; }
 }
 
-client.once("ready", () => {
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand() || interaction.commandName !== "認証パネル") return;
+  if (!interaction.inGuild() || interaction.guildId !== GUILD_ID) {
+    return interaction.reply({ content: "このコマンドは設定されたサーバー内で使用してください。", ephemeral: true });
+  }
+  const allowed = interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+    interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
+  if (!allowed) {
+    return interaction.reply({ content: "このコマンドを使用するにはサーバー管理権限が必要です。", ephemeral: true });
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle("サーバー認証")
+    .setDescription("サーバーに参加した方は、以下のボタンからDiscord認証を行ってください。\\n\\n認証が完了すると、自動的に認証済みロールが付与されます。")
+    .setFooter({ text: "Verify System" });
+
+  const button = new ButtonBuilder()
+    .setLabel("Discordで認証する")
+    .setStyle(ButtonStyle.Link)
+    .setURL(apiBase + "/auth/discord");
+
+  const row = new ActionRowBuilder().addComponents(button);
+  try {
+    await interaction.channel.send({ embeds: [embed], components: [row] });
+    await interaction.reply({ content: "認証パネルを設置しました。", ephemeral: true });
+  } catch (error) {
+    console.error("Could not send verification panel:", error.message);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "認証パネルを設置できませんでした。Botのチャンネル権限を確認してください。", ephemeral: true }).catch(() => {});
+    }
+  }
+});
+
+client.once("ready", async () => {
   console.log("Discord bot logged in as " + client.user.tag);
+  try {
+    const panelCommand = new SlashCommandBuilder()
+      .setName("認証パネル")
+      .setDescription("このチャンネルにサーバー認証パネルを設置します")
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild);
+    await client.application.commands.set([panelCommand], GUILD_ID);
+    console.log("Registered /認証パネル command for guild " + GUILD_ID);
+  } catch (error) {
+    console.error("Could not register /認証パネル command:", error.message);
+  }
   console.log("Polling Verify-web over HTTPS every " + pollInterval + "ms");
   pollOnce();
   setInterval(pollOnce, pollInterval);
